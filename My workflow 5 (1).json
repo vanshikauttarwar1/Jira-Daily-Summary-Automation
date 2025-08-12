@@ -1,0 +1,211 @@
+{
+  "name": "My workflow 5",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 18
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        192,
+        0
+      ],
+      "id": "a8e0780c-5ff6-4b7a-99c7-f4ae0e12e3d9",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "32a89739-9a7a-4232-b0ff-2fc2c846f4a6",
+              "name": "id",
+              "value": "={{ $execution.id }}",
+              "type": "string"
+            },
+            {
+              "id": "ce0ef4dc-9ea7-4b80-86ac-71f8ffdd4e64",
+              "name": "name",
+              "value": "={{ $workflow.name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "15044762-5cfa-4a5a-a304-2842a3ff4cfe",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "url": "https://vanshikauttarwar.atlassian.net/rest/api/3/search?jql=project = N8N AND sprint in openSprints()",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "70d3dd48-b687-491d-b8f1-5577f4c8e882",
+      "name": "HTTP Request1",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "8lXNfwqDfRbtQPKw",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// The HTTP Request node returns one item. Get its JSON body.\nconst jiraApiResponse = $input.first().json;\n\n// The actual list of issues is inside the .issues property of that body.\n// If jiraApiResponse or .issues doesn't exist, default to an empty array.\nconst issues = jiraApiResponse?.issues || [];\n\n// Get sprintName from the \"Edit Fields\" node.\n// IMPORTANT: This looks up a node by its name. Make sure it matches.\nconst sprintName = $(\"Edit Fields\").all()[0]?.json?.name || \"Current Sprint\";\n\nlet completed = 0;\nlet inProgress = 0;\nlet blocked = 0;\n\n// Loop through each issue found in the API response.\nfor (const issue of issues) {\n  // Use OPTIONAL CHAINING (?.) to safely access nested properties.\n  // If issue.fields, .status, or .name is missing, `status` will be undefined.\n  const status = issue.fields?.status?.name?.toLowerCase();\n\n  // If a status couldn't be found for any reason, skip to the next issue.\n  if (!status) {\n    continue; // `continue` is used in a for...of loop to skip an iteration.\n  }\n\n  if (status.includes(\"done\") || status.includes(\"closed\")) {\n    completed++;\n  } else if (status.includes(\"in progress\") || status.includes(\"development\")) {\n    inProgress++;\n  } else if (status.includes(\"blocked\")) {\n    blocked++;\n  }\n}\n\nconst dailySummary = `Sprint: ${sprintName}\\nCompleted: ${completed}\\nIn Progress: ${inProgress}\\nBlocked: ${blocked}`;\n\n// Return the final data in the correct n8n format.\nreturn [{\n  json: {\n    dailySummary: dailySummary\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "46659838-3294-462f-93dd-4f8062ccb1ff",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "openai/gpt-4o",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a senior project manager delivering a daily stand-up summary. Be concise, professional, and slightly informal.\n\nYour task is to summarize the following sprint data into a 3-sentence report suitable for a Slack message.\n\n**Report Data:**\n{{ $json.dailySummary }}\n\n**Output Formatting Rules:**\n1.  Start with a positive greeting (e.g., \"Good morning, team!\" or \"Here's our daily progress check:\").\n2.  Clearly state the number of completed, in-progress, and blocked tasks.\n3.  If there are blocked issues, end with a clear call to action like: \"Our main priority today is to resolve the blocker(s).\"\n4.  If there are ZERO blocked issues, end with an encouraging message like: \"Great work, no blockers! Let's keep up the momentum.\"\n\n\n\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "c2af7c3e-fe2b-488e-b50f-2e62421bd0eb",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "4JszTp99r16taqfr",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "vanshikauttarwar14@gmail.com",
+        "subject": "=Daily Jira Sprint Summary - {{ $now.format(\"YYYY-MM-DD\") }}",
+        "message": "={{ $json.choices[0].message.content.replace(/\\n/g, '<br>') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1392,
+        0
+      ],
+      "id": "4bfb73da-5b3c-4b2e-b83e-2447338e57e6",
+      "name": "Send a message",
+      "webhookId": "8908f04d-ca59-4403-a3ec-543fd0d9ea8e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "4g7fN9vC4wLGyqZO",
+          "name": "Gmail account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "9cf7c566-3f70-43e0-90f2-bbb81d078b1e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d05b14ee186156e9219676c3f45f90c97f63a672a85251f73d8eeffa69741b9c"
+  },
+  "id": "942Fypg9jK1U7vnV",
+  "tags": []
+}
